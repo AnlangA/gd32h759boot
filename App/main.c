@@ -1,5 +1,7 @@
 #include "main.h"
 #include "gd32h7xx.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 
 void cache_enable(void)
@@ -30,13 +32,51 @@ int main(void)
     /* 定义中断向量表大小 */
     #define VECTOR_SIZE     0x100
     
-    /* 定义栈指针有效性掩码 */
-    #define STACK_MASK      0x2FFE0000
-    #define RAM_BASE        0x20000000
+    /* 检查地址是否在有效RAM区域的函数 */
+    bool is_valid_ram_address(uint32_t addr)
+    {
+        /* 检查SRAM0区域 (512KB) */
+        if ((addr >= 0x20000000) && (addr < 0x20080000))
+            return true;
+        
+        /* 检查SRAM1区域 (512KB) */
+        if ((addr >= 0x20080000) && (addr < 0x20100000))
+            return true;
+        
+        /* 检查ITCM区域 (1024KB) */
+        if ((addr >= 0x24000000) && (addr < 0x24100000))
+            return true;
+        
+        /* 检查DTCM区域 (512KB) */
+        if ((addr >= 0x30000000) && (addr < 0x30080000))
+            return true;
+        
+        return false;
+    }
+    
+    
+    
+    /* 检查地址是否在有效RAM区域的函数 */
+    bool is_valid_ram_address(uint32_t addr)
+    {
+        /* 检查SRAM0区域 */
+        if (addr >= SRAM0_BASE && addr < (SRAM0_BASE + SRAM0_SIZE))
+            return true;
+        /* 检查SRAM1区域 */
+        if (addr >= SRAM1_BASE && addr < (SRAM1_BASE + SRAM1_SIZE))
+            return true;
+        /* 检查ITCM区域 */
+        if (addr >= ITCM_BASE && addr < (ITCM_BASE + ITCM_SIZE))
+            return true;
+        /* 检查DTCM区域 */
+        if (addr >= DTCM_BASE && addr < (DTCM_BASE + DTCM_SIZE))
+            return true;
+        
+        return false;
+    }
     
     /* 函数指针定义 */
     typedef void (*app_func)(void);
-    
     uint32_t jump_address;
     app_func jump_to_app;
     uint32_t stack_ptr;
@@ -63,7 +103,7 @@ int main(void)
     stack_ptr = *(uint32_t*)APP_ADDRESS;
     
     /* 检查栈顶地址是否有效 - 检查应用程序是否已烧录 */
-    if ((stack_ptr & STACK_MASK) == RAM_BASE)
+    if (is_valid_ram_address(stack_ptr))
     {
         /* 获取应用程序复位向量 */
         jump_address = *(uint32_t*)(APP_ADDRESS + 4);
