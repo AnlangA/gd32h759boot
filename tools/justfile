@@ -1,0 +1,5 @@
+# Format command to format C files in Driver, Lib, and User directories
+format:
+    @echo "Formatting C files in Driver, Lib, and User directories..."
+    @find ../Driver ../Lib ../User -type f \( -name "*.c" -o -name "*.h" \) -exec clang-format -i --style=file:../tools/code.clang-format {} \;
+    @echo "Formatting complete!"

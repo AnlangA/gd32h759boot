@@ -1,0 +1,29 @@
+Language: Cpp  # clang-format 的 C 语言设置仍使用 Cpp，但会适配 C 风格
+BasedOnStyle: LLVM
+# 缩进宽度
+IndentWidth: 4
+# Tab 宽度
+TabWidth: 4
+# 使用空格而不是 Tab
+UseTab: Never
+# 换行风格 (LF for Unix, CRLF for Windows)
+LineEnding: LF
+# 指针和引用对齐（C 中主要是指针）
+PointerAlignment: Left
+# 每行最大列数
+ColumnLimit: 160  # C 代码通常使用较短的列宽
+# 访问修饰符（如 struct 中的 public:）缩进
+AccessModifierOffset: -2
+# 换行规则（Allman 风格，C 中常用）
+BreakBeforeBraces: Allman
+# 允许短的 if 语句单行
+AllowShortIfStatementsOnASingleLine: true
+# 允许短循环单行
+AllowShortLoopsOnASingleLine: true
+# 自动排序 #include
+SortIncludes: true
+# 空格设置
+SpaceBeforeParens: ControlStatements
+SpaceAfterCStyleCast: true
+# 禁用一些 C++ 特定功能
+AllowShortFunctionsOnASingleLine: None  # C 中通常不鼓励单行函数
