@@ -39,7 +39,7 @@ int main(void)
         SCB->VTOR = APP_ADDRESS & 0x1FFFFF80U;
         __set_MSP(app_stack_ptr);
 
-				jump_address  = *(__IO uint32_t *)(APP_ADDRESS + 4);
+		jump_address  = *(__IO uint32_t *)(APP_ADDRESS + 4);
         /* 跳转：清除 LSB */
         JumpToApp = (pFunction)(jump_address);
         JumpToApp();
