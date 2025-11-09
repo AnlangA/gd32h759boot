@@ -1,5 +1,8 @@
 #include "gd32h7xx.h"
 #include "stdint.h"
+#include "log.h"
+#include "console_usart.h"
+#include "mcuboot_logging.h"
 
 /* ---------- 1. 地址定义 ---------- */
 #define APP_ADDRESS     0x08020000U
@@ -10,6 +13,34 @@
 /* ---------- 2. 函数指针类型 ---------- */
 typedef void (*pFunction)(void);
 
+
+void check_reset_source(void)
+{
+    if (rcu_flag_get(RCU_FLAG_BORRST)) {
+        MCUBOOT_LOG_SIM("BOR reset");
+    }
+    if (rcu_flag_get(RCU_FLAG_EPRST)) {
+        MCUBOOT_LOG_SIM("External reset");
+    }
+    if (rcu_flag_get(RCU_FLAG_PORRST)) {
+        MCUBOOT_LOG_SIM("Power-on reset");
+    }
+    if (rcu_flag_get(RCU_FLAG_SWRST)) {
+        MCUBOOT_LOG_SIM("Software reset");
+    }
+    if (rcu_flag_get(RCU_FLAG_FWDGTRST)) {
+        MCUBOOT_LOG_SIM("free watchdog timer reset flag");
+    }
+    if (rcu_flag_get(RCU_FLAG_WWDGTRST)) {
+        MCUBOOT_LOG_SIM("Watchdog reset");
+    }
+    if (rcu_flag_get(RCU_FLAG_LPRST)) {
+        MCUBOOT_LOG_SIM("Low-power reset");
+    }
+
+    rcu_all_reset_flag_clear();
+}
+
 /* ---------- 3. 主函数 ---------- */
 int main(void)
 {
@@ -18,6 +49,10 @@ int main(void)
     pFunction JumpToApp;
 
     __disable_irq();
+
+    console_init();
+
+    check_reset_source();
     nvic_priority_group_set(NVIC_PRIGROUP_PRE4_SUB0);
 
     /* 1. 先关闭缓存 */
