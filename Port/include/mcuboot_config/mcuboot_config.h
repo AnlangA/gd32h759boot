@@ -145,6 +145,25 @@
 #define MCUBOOT_CPU_IDLE()     ((void)0)
 
 /* ======================================================================== */
+/*  Watchdog feed                                                           */
+/* ======================================================================== */
+/*
+ * MCUBoot calls MCUBOOT_WATCHDOG_FEED() during long operations (erase,
+ * swap) to prevent watchdog resets.  For bare-metal bring-up without a
+ * watchdog driver, define it as a no-op.
+ */
+#define MCUBOOT_WATCHDOG_FEED()  ((void)0)
+
+/* ======================================================================== */
+/*  Flash sector API selection                                              */
+/* ======================================================================== */
+/*
+ * Use flash_area_get_sectors() instead of the deprecated flash_area_to_sectors().
+ * Our flash_map_backend.c implements flash_area_get_sectors(), so enable this.
+ */
+#define MCUBOOT_USE_FLASH_AREA_GET_SECTORS
+
+/* ======================================================================== */
 /*  Assert                                                                  */
 /* ======================================================================== */
 /*

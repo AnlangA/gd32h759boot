@@ -2,7 +2,7 @@
 #include "stdint.h"
 #include "log.h"
 #include "console_usart.h"
-#include "mcuboot_logging.h"
+#include "mcuboot_config/mcuboot_logging.h"
 
 /* ---------- 1. 地址定义 ---------- */
 #define APP_ADDRESS     0x08020000U

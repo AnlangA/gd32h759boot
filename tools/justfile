@@ -3,3 +3,28 @@ format:
     @echo "Formatting C files in Driver, Lib, and User directories..."
     @find ../Driver ../Lib ../User -type f \( -name "*.c" -o -name "*.h" \) -exec clang-format -i --style=file:../tools/code.clang-format {} \;
     @echo "Formatting complete!"
+
+# Build the Keil project and copy build log to project root
+build:
+    "C:/Program Files/Keil/UV4/UV4.exe" -b ../Project/gd32h759temple.uvprojx -j0
+    cp ../Project/Output/gh32h759temple.build_log.htm ../build_log.htm
+    @echo "Build log copied to ../build_log.htm"
+
+# Rebuild (clean + build) the Keil project
+rebuild:
+    "C:/Program Files/Keil/UV4/UV4.exe" -r ../Project/gd32h759temple.uvprojx -j0
+    cp ../Project/Output/gh32h759temple.build_log.htm ../build_log.htm
+    @echo "Build log copied to ../build_log.htm"
+
+# Show errors from the build log
+errors:
+    @grep -i "error" ../build_log.htm 2>/dev/null || echo "No errors found or build_log.htm does not exist."
+
+# Show warnings from the build log
+warnings:
+    @grep -i "warning" ../build_log.htm 2>/dev/null || echo "No warnings found or build_log.htm does not exist."
+
+# Clean build output files
+clean:
+    rm -rf ../Project/Output/*.o ../Project/Output/*.d ../Project/Output/*.axf ../Project/Output/*.htm ../Project/Output/*.hex ../Project/Output/*.lnp ../build_log.htm
+    @echo "Clean done."

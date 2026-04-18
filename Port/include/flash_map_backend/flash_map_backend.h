@@ -40,28 +40,32 @@ extern "C" {
  * These IDs are used by MCUBoot to identify different firmware slots.
  * The actual address mapping is defined in flash_map_backend.c.
  *
- * Memory layout (example for 2 MB Flash, single image):
+ * FLASH_AREA_IMAGE_PRIMARY(x) / FLASH_AREA_IMAGE_SECONDARY(x) function-like
+ * macros are provided by sysflash/sysflash.h (included below).  We do NOT
+ * redefine the plain names FLASH_AREA_IMAGE_PRIMARY / FLASH_AREA_IMAGE_SECONDARY
+ * as object-like macros here, because that would conflict with the function-like
+ * macros from sysflash.h and cause "called object type 'int' is not a function"
+ * errors.
  *
- *   0x0800_0000 +-------------------+  <- Primary slot
- *               |  Slot 0 (Primary) |
- *               |  640 KB           |
- *   0x080A_0000 +-------------------+  <- Secondary slot
- *               |  Slot 1 (Secondary)|
- *               |  640 KB           |
- *   0x0814_0000 +-------------------+  <- Scratch area (optional)
- *               |  Scratch          |
- *               |  128 KB           |
- *   0x0816_0000 +-------------------+
- *               |  Application      |
- *               |  remaining space  |
- *   0x083C_0000 +-------------------+  <- Flash end
- *
- * NOTE: Adjust these to match your linker script and partition table.
+ * Use FLASH_AREA_IMAGE_PRIMARY(0) to get the integer ID (evaluates to 1).
  */
-#define FLASH_AREA_BOOTLOADER          0
-#define FLASH_AREA_IMAGE_PRIMARY       1
-#define FLASH_AREA_IMAGE_SECONDARY     2
-#define FLASH_AREA_IMAGE_SCRATCH       3
+
+/* ======================================================================== */
+/*  sysflash.h – provides FLASH_AREA_IMAGE_PRIMARY(x) etc.                  */
+/* ======================================================================== */
+/*
+ * Include sysflash.h FIRST so the function-like macros are defined before
+ * anything else tries to use them.  sysflash.h also provides:
+ *   FLASH_AREA_ID_BOOTLOADER / _IMAGE_PRIMARY / _IMAGE_SECONDARY / _IMAGE_SCRATCH
+ * which are plain integer constants used in flash_map_backend.c.
+ */
+#include <sysflash/sysflash.h>
+
+/* ======================================================================== */
+/*  Flash area ID constants (legacy names)                                  */
+/* ======================================================================== */
+#define FLASH_AREA_BOOTLOADER          FLASH_AREA_ID_BOOTLOADER
+#define FLASH_AREA_IMAGE_SCRATCH       FLASH_AREA_ID_IMAGE_SCRATCH
 
 /* ======================================================================== */
 /*  Convenience macros for single-image setup                               */
@@ -69,20 +73,12 @@ extern "C" {
 #define FLASH_AREA_IMAGE_PRIMARY_SLOT     0
 #define FLASH_AREA_IMAGE_SECONDARY_SLOT   1
 
-/*
- * MCUBoot uses FLASH_AREA_IMAGE_PRIMARY(x) / FLASH_AREA_IMAGE_SECONDARY(x)
- * to look up area IDs by image index. For single-image (x is always 0).
- */
-#define FLASH_AREA_IMAGE_PRIMARY(x)                                      \
-    (((x) == 0) ? FLASH_AREA_IMAGE_PRIMARY : 255)
-
-#define FLASH_AREA_IMAGE_SECONDARY(x)                                    \
-    (((x) == 0) ? FLASH_AREA_IMAGE_SECONDARY : 255)
-
 /* ======================================================================== */
 /*  Flash geometry constants (GD32H7xx)                                     */
 /* ======================================================================== */
+#ifndef FLASH_SECTOR_SIZE
 #define FLASH_SECTOR_SIZE              (128U * 1024U)  /* 128 KB           */
+#endif
 #define FLASH_WRITE_ALIGN              8U               /* 8-byte writes   */
 #define FLASH_ERASED_VAL               0xFFU
 

@@ -14,9 +14,9 @@
  *   - gd32h7xx_fmc.h / gd32h7xx_fmc.c for HAL API
  *
  * Flash geometry (GD32H759):
- *   - Bank 0: 0x0800_0000, up to 1 MB, sector size 128 KB
- *   - Bank 1: 0x0810_0000, up to 1 MB, sector size 128 KB
- *   - Minimum write granularity: 8 bytes (64-bit word)
+ *   - Flash: 0x0800_0000, up to 3712 KB
+ *   - Sector size: 128 KB
+ *   - Minimum write granularity: 8 bytes (64-bit double word)
  *   - Erase granularity: 128 KB per sector
  *   - Erased byte value: 0xFF
  */
@@ -109,98 +109,39 @@ static inline uint32_t fa_to_abs_addr(const struct flash_area *fa, uint32_t off)
 /**
  * Wait until the FMC is ready (no ongoing program / erase operation).
  *
- * This polls the FMC bank status registers. GD32H7xx has two banks;
- * we determine which bank based on the address and poll the correct one.
+ * Polls FMC_STAT BUSY flag with a timeout.
  *
- * @return 0 on success, -1 on timeout.
+ * @return 0 on success, -1 on timeout or error.
  */
-static int fmc_wait_ready(uint32_t abs_addr)
+static int wait_fmc_ready(void)
 {
     volatile uint32_t timeout = 0x00FFFFFFU;
 
-    if (abs_addr < 0x08100000U) {
-        /* Bank 0 */
-        while ((FMC_STAT0 & FMC_STAT0_BUSY) && timeout) {
-            timeout--;
-        }
-        if (0 == timeout) {
-            FLASH_LOG_ERR("FMC bank0 wait timeout");
-            return -1;
-        }
-        /* Check for errors */
-        if (FMC_STAT0 & (FMC_STAT0_PGERR | FMC_STAT0_WPERR)) {
-            FMC_STAT0 = FMC_STAT0_PGERR | FMC_STAT0_WPERR;
-            FLASH_LOG_ERR("FMC bank0 error, STAT0=0x%08lX", FMC_STAT0);
-            return -1;
-        }
-    } else {
-        /* Bank 1 */
-        while ((FMC_STAT1 & FMC_STAT1_BUSY) && timeout) {
-            timeout--;
-        }
-        if (0 == timeout) {
-            FLASH_LOG_ERR("FMC bank1 wait timeout");
-            return -1;
-        }
-        if (FMC_STAT1 & (FMC_STAT1_PGERR | FMC_STAT1_WPERR)) {
-            FMC_STAT1 = FMC_STAT1_PGERR | FMC_STAT1_WPERR;
-            FLASH_LOG_ERR("FMC bank1 error, STAT1=0x%08lX", FMC_STAT1);
-            return -1;
-        }
+    while ((RESET != fmc_flag_get(FMC_FLAG_BUSY)) && timeout) {
+        timeout--;
     }
-    return 0;
-}
+    if (0 == timeout) {
+        FLASH_LOG_ERR("FMC wait ready timeout");
+        return -1;
+    }
 
-/**
- * Unlock the FMC for program/erase operations.
- *
- * GD32H7xx requires a specific unlock sequence (KEY0 / KEY1 writes).
- * Both banks may need to be unlocked depending on the target address.
- *
- * @param abs_addr  Absolute flash address being accessed.
- * @return 0 on success, -1 on failure.
- */
-static int fmc_unlock(uint32_t abs_addr)
-{
-    if (abs_addr < 0x08100000U) {
-        /* Unlock Bank 0 */
-        if (FMC_STAT0 & FMC_STAT0_BUSY) {
-            FLASH_LOG_ERR("Cannot unlock bank0: FMC busy");
-            return -1;
-        }
-        FMC_UNLK0 = FMC_UNLOCK_KEY0;
-        FMC_UNLK0 = FMC_UNLOCK_KEY1;
-    } else {
-        /* Unlock Bank 1 */
-        if (FMC_STAT1 & FMC_STAT1_BUSY) {
-            FLASH_LOG_ERR("Cannot unlock bank1: FMC busy");
-            return -1;
-        }
-        FMC_UNLK1 = FMC_UNLOCK_KEY0;
-        FMC_UNLK1 = FMC_UNLOCK_KEY1;
+    /* Check for error flags */
+    if (RESET != fmc_flag_get(FMC_FLAG_WPERR)) {
+        FLASH_LOG_ERR("FMC write protection error");
+        return -1;
     }
-    return 0;
-}
+    if (RESET != fmc_flag_get(FMC_FLAG_PGSERR)) {
+        FLASH_LOG_ERR("FMC program sequence error");
+        return -1;
+    }
 
-/**
- * Lock the FMC after program/erase operations.
- *
- * @param abs_addr  Absolute flash address being accessed.
- */
-static void fmc_lock(uint32_t abs_addr)
-{
-    if (abs_addr < 0x08100000U) {
-        FMC_UNLK0 = FMC_LOCK_KEY;
-    } else {
-        FMC_UNLK1 = FMC_LOCK_KEY;
-    }
+    return 0;
 }
 
 /**
  * Erase a single 128 KB flash sector.
  *
- * GD32H7xx FMC supports sector erase. The sector number is calculated
- * from the absolute address.
+ * Uses the GD32H7xx standard peripheral library fmc_sector_erase().
  *
  * @param abs_addr  Absolute address within the sector to erase.
  *                  Must be sector-aligned.
@@ -208,97 +149,63 @@ static void fmc_lock(uint32_t abs_addr)
  */
 static int erase_sector(uint32_t abs_addr)
 {
-    int rc;
+    fmc_state_enum fmc_state;
 
-    rc = fmc_unlock(abs_addr);
-    if (rc != 0) {
-        return rc;
+    fmc_unlock();
+
+    /* Clear error flags before operation */
+    fmc_flag_clear(FMC_FLAG_END);
+    fmc_flag_clear(FMC_FLAG_WPERR);
+    fmc_flag_clear(FMC_FLAG_PGSERR);
+
+    fmc_state = fmc_sector_erase(abs_addr);
+
+    fmc_lock();
+
+    if (fmc_state != FMC_READY) {
+        FLASH_LOG_ERR("fmc_sector_erase failed at 0x%08lX, state=%d",
+                      (unsigned long)abs_addr, (int)fmc_state);
+        return -1;
     }
 
-    if (abs_addr < 0x08100000U) {
-        /* Bank 0: sector number = (addr - 0x08000000) / 128K */
-        uint32_t sn = (abs_addr - 0x08000000U) / FLASH_SECTOR_SIZE;
-
-        /* Set the sector number to erase */
-        FMC_CTL0 &= ~FMC_CTL0_SN_MASK;
-        FMC_CTL0 |= (sn << FMC_CTL0_SN_POS) & FMC_CTL0_SN_MASK;
-
-        /* Start sector erase */
-        FMC_CTL0 |= FMC_CTL0_SER;
-        FMC_CTL0 |= FMC_CTL0_START;
-
-        /* Wait for completion */
-        rc = fmc_wait_ready(abs_addr);
-
-        /* Clear start bit and sector erase mode */
-        FMC_CTL0 &= ~FMC_CTL0_START;
-        FMC_CTL0 &= ~FMC_CTL0_SER;
-    } else {
-        /* Bank 1: sector number = (addr - 0x08100000) / 128K */
-        uint32_t sn = (abs_addr - 0x08100000U) / FLASH_SECTOR_SIZE;
-
-        FMC_CTL1 &= ~FMC_CTL1_SN_MASK;
-        FMC_CTL1 |= (sn << FMC_CTL1_SN_POS) & FMC_CTL1_SN_MASK;
-
-        FMC_CTL1 |= FMC_CTL1_SER;
-        FMC_CTL1 |= FMC_CTL1_START;
-
-        rc = fmc_wait_ready(abs_addr);
-
-        FMC_CTL1 &= ~FMC_CTL1_START;
-        FMC_CTL1 &= ~FMC_CTL1_SER;
-    }
-
-    fmc_lock(abs_addr);
-    return rc;
+    return 0;
 }
 
 /**
  * Program 8 bytes (64-bit) to flash at the given absolute address.
  *
- * GD32H7xx FMC requires 64-bit aligned writes for internal flash.
+ * Uses the GD32H7xx standard peripheral library fmc_doubleword_program().
  *
  * @param abs_addr  Must be 8-byte aligned.
  * @param data      Pointer to at least 8 bytes of data.
  * @return 0 on success, non-zero on failure.
  */
-static int program_64bit(uint32_t abs_addr, const uint64_t *data)
+static int program_doubleword(uint32_t abs_addr, uint64_t data)
 {
-    int rc;
+    fmc_state_enum fmc_state;
 
-    rc = fmc_unlock(abs_addr);
-    if (rc != 0) {
-        return rc;
-    }
+    fmc_unlock();
 
-    if (abs_addr < 0x08100000U) {
-        FMC_CTL0 |= FMC_CTL0_PG;
-    } else {
-        FMC_CTL1 |= FMC_CTL1_PG;
-    }
+    /* Clear end-of-operation flag */
+    fmc_flag_clear(FMC_FLAG_END);
 
-    /* Write the 64-bit word using volatile pointer to prevent
-     * compiler reordering or optimisation. */
-    *(__IO uint64_t *)abs_addr = *data;
+    fmc_state = fmc_doubleword_program(abs_addr, data);
 
-    /* Wait for completion */
-    rc = fmc_wait_ready(abs_addr);
+    fmc_lock();
 
-    if (abs_addr < 0x08100000U) {
-        FMC_CTL0 &= ~FMC_CTL0_PG;
-    } else {
-        FMC_CTL1 &= ~FMC_CTL1_PG;
-    }
-
-    fmc_lock(abs_addr);
-
-    /* Verify the written data */
-    if (*(__IO uint64_t *)abs_addr != *data) {
-        FLASH_LOG_ERR("Flash verify failed at 0x%08lX", abs_addr);
+    if (fmc_state != FMC_READY) {
+        FLASH_LOG_ERR("fmc_doubleword_program failed at 0x%08lX, state=%d",
+                      (unsigned long)abs_addr, (int)fmc_state);
         return -1;
     }
 
-    return rc;
+    /* Verify the written data */
+    if (*(__IO uint64_t *)abs_addr != data) {
+        FLASH_LOG_ERR("Flash verify failed at 0x%08lX", (unsigned long)abs_addr);
+        return -1;
+    }
+
+    return 0;
 }
 
 /* ======================================================================== */
@@ -410,7 +317,7 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
         memcpy((uint8_t *)&buf + (abs_addr & 0x7U), src_bytes, head_bytes);
 
         /* Write it back */
-        rc = program_64bit(aligned_start, &buf);
+        rc = program_doubleword(aligned_start, buf);
         if (rc != 0) {
             FLASH_LOG_ERR("flash_area_write: head write failed");
             return rc;
@@ -426,7 +333,7 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
         uint64_t word;
         memcpy(&word, src_bytes, 8);
 
-        rc = program_64bit(abs_addr, &word);
+        rc = program_doubleword(abs_addr, word);
         if (rc != 0) {
             FLASH_LOG_ERR("flash_area_write: write failed at 0x%08lX",
                           (unsigned long)abs_addr);
@@ -446,7 +353,7 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
         buf = *(__IO uint64_t *)abs_addr;
         memcpy(&buf, src_bytes, remaining);
 
-        rc = program_64bit(abs_addr, &buf);
+        rc = program_doubleword(abs_addr, buf);
         if (rc != 0) {
             FLASH_LOG_ERR("flash_area_write: tail write failed");
             return rc;
