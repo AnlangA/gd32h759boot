@@ -107,38 +107,6 @@ static inline uint32_t fa_to_abs_addr(const struct flash_area *fa, uint32_t off)
 }
 
 /**
- * Wait until the FMC is ready (no ongoing program / erase operation).
- *
- * Polls FMC_STAT BUSY flag with a timeout.
- *
- * @return 0 on success, -1 on timeout or error.
- */
-static int wait_fmc_ready(void)
-{
-    volatile uint32_t timeout = 0x00FFFFFFU;
-
-    while ((RESET != fmc_flag_get(FMC_FLAG_BUSY)) && timeout) {
-        timeout--;
-    }
-    if (0 == timeout) {
-        FLASH_LOG_ERR("FMC wait ready timeout");
-        return -1;
-    }
-
-    /* Check for error flags */
-    if (RESET != fmc_flag_get(FMC_FLAG_WPERR)) {
-        FLASH_LOG_ERR("FMC write protection error");
-        return -1;
-    }
-    if (RESET != fmc_flag_get(FMC_FLAG_PGSERR)) {
-        FLASH_LOG_ERR("FMC program sequence error");
-        return -1;
-    }
-
-    return 0;
-}
-
-/**
  * Erase a single 128 KB flash sector.
  *
  * Uses the GD32H7xx standard peripheral library fmc_sector_erase().
