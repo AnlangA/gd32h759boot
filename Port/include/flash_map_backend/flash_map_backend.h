@@ -11,11 +11,9 @@
  * underlying HAL.
  *
  * Reference: GD32H7xx User Manual - FMC (Flash Memory Controller) chapter
- *   - Bank 0: 0x0800_0000 - 0x080F_FFFF  (up to 1 MB, sector size 128 KB)
- *   - Bank 1: 0x0810_0000 - 0x081F_FFFF  (up to 1 MB, sector size 128 KB)
- *   - Total:  up to 2 MB internal Flash
+ *   - Sector size (erase granularity): 4 KB
  *   - Minimum write granularity: 8 bytes (64-bit)
- *   - Erase granularity: 128 KB per sector (8 KB sub-sectors on some parts)
+ *   - Erased byte value: 0xFF
  */
 
 #ifndef __FLASH_MAP_BACKEND_H__
@@ -77,7 +75,7 @@ extern "C" {
 /*  Flash geometry constants (GD32H7xx)                                     */
 /* ======================================================================== */
 #ifndef FLASH_SECTOR_SIZE
-#define FLASH_SECTOR_SIZE              (128U * 1024U)  /* 128 KB           */
+#define FLASH_SECTOR_SIZE              (4U * 1024U)    /* 4 KB erase granularity */
 #endif
 #define FLASH_WRITE_ALIGN              8U               /* 8-byte writes   */
 #define FLASH_ERASED_VAL               0xFFU

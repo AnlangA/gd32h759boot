@@ -8,10 +8,10 @@
  * Defines the physical flash partition table used by MCUBoot.
  * All offsets are relative to the start of internal flash (0x0800_0000).
  *
- * GD32H759 Flash total: up to 2 MB (0x0800_0000 - 0x083C_0000 = 3712 KB)
- *   - Bank 0: 0x0800_0000 - 0x080F_FFFF (up to 1 MB)
- *   - Bank 1: 0x0810_0000 - 0x081F_FFFF (up to 1 MB)
- *   - Sector size: 128 KB
+ * GD32H759 Flash total: up to 3840 KB (0x0800_0000 - 0x083C_0000)
+ *   - Sector size (erase granularity): 4 KB (0x1000)
+ *   - Total sectors: 960 (0x000 ~ 0x3BF)
+ *   - Minimum write granularity: 8 bytes (64-bit double word)
  *
  * Partition layout (overwrite-only, single image):
  *
@@ -43,14 +43,14 @@ extern "C" {
 /*  Flash base and total size                                               */
 /* ======================================================================== */
 #define FLASH_BASE_ADDR               0x08000000U
-#define FLASH_TOTAL_SIZE              0x003C0000U   /* 3712 KB (GD32H759IQ)  */
-#define FLASH_SECTOR_SIZE             0x00020000U   /* 128 KB                */
+#define FLASH_TOTAL_SIZE              0x003C0000U   /* 3840 KB (GD32H759IQ)  */
+#define FLASH_SECTOR_SIZE             0x00001000U   /* 4 KB (hardware erase granularity) */
 
 /* ======================================================================== */
 /*  Bootloader partition                                                    */
 /* ======================================================================== */
 #define FLASH_AREA_BOOTLOADER_OFFSET  0x00000000U
-#define FLASH_AREA_BOOTLOADER_SIZE    0x00020000U   /* 128 KB (1 sector)    */
+#define FLASH_AREA_BOOTLOADER_SIZE    0x00020000U   /* 128 KB (32 x 4 KB sectors) */
 
 /* ======================================================================== */
 /*  Primary slot (Slot 0)                                                   */
@@ -62,7 +62,7 @@ extern "C" {
  * which matches the APP_ADDRESS defined in main.h (0x0802_0000).
  */
 #define FLASH_AREA_IMAGE_PRIMARY_OFFSET    0x00020000U   /* 128 KB from start */
-#define FLASH_AREA_IMAGE_PRIMARY_SIZE      0x000A0000U   /* 640 KB (5 sectors) */
+#define FLASH_AREA_IMAGE_PRIMARY_SIZE      0x000A0000U   /* 640 KB (160 x 4 KB sectors) */
 
 /* ======================================================================== */
 /*  Secondary slot (Slot 1)                                                 */
@@ -72,7 +72,7 @@ extern "C" {
  * Must be the same size as the primary slot.
  */
 #define FLASH_AREA_IMAGE_SECONDARY_OFFSET  0x000C0000U   /* 768 KB from start */
-#define FLASH_AREA_IMAGE_SECONDARY_SIZE    0x000A0000U   /* 640 KB (5 sectors) */
+#define FLASH_AREA_IMAGE_SECONDARY_SIZE    0x000A0000U   /* 640 KB (160 x 4 KB sectors) */
 
 /* ======================================================================== */
 /*  Scratch area                                                            */
@@ -85,7 +85,7 @@ extern "C" {
     defined(MCUBOOT_SWAP_USING_MOVE)    || \
     defined(MCUBOOT_SWAP_USING_OFFSET)
 #define FLASH_AREA_IMAGE_SCRATCH_OFFSET   0x00160000U   /* 1408 KB from start */
-#define FLASH_AREA_IMAGE_SCRATCH_SIZE     0x00020000U   /* 128 KB (1 sector)  */
+#define FLASH_AREA_IMAGE_SCRATCH_SIZE     0x00020000U   /* 128 KB (32 x 4 KB sectors) */
 #else
 #define FLASH_AREA_IMAGE_SCRATCH_OFFSET   0x00000000U
 #define FLASH_AREA_IMAGE_SCRATCH_SIZE     0x00000000U

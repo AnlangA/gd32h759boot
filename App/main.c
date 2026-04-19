@@ -10,8 +10,20 @@
 
 /* ---------- 1. Address definitions ---------- */
 #define FLASH_END       0x083C0000U
-#define SRAM_SIZE       0xE0000U         /* 512 KB AXI SRAM */
-#define SRAM_END        (SRAM_BASE + SRAM_SIZE)
+
+/* Valid SRAM regions for stack pointer validation:
+ *   DTCM:      0x20000000 - 0x2000FFFF  (64 KB)
+ *   AXI SRAM:  0x24000000 - 0x240DFFFF  (896 KB)
+ *   SRAM1:     0x30000000 - 0x30003FFF  (16 KB)
+ *   SRAM2:     0x30004000 - 0x30007FFF  (16 KB)
+ */
+static inline int sp_in_valid_sram(uint32_t sp)
+{
+    if (sp >= 0x20000000U && sp <= 0x2000FFFFU) return 1;  /* DTCM */
+    if (sp >= 0x24000000U && sp <= 0x240DFFFFU) return 1;  /* AXI SRAM */
+    if (sp >= 0x30000000U && sp <= 0x30007FFFU) return 1;  /* SRAM1+SRAM2 */
+    return 0;
+}
 
 /* ---------- 2. Function pointer type ---------- */
 typedef void (*pFunction)(void);
@@ -87,6 +99,10 @@ int main(void)
 
     MCUBOOT_LOG_INF("Booting image at 0x%08lX", (unsigned long)app_addr);
 
+    /* De-initialize peripherals before jumping to application */
+    usart_disable(CONSOLE_USARTX);
+    rcu_periph_clock_disable(CONSOLE_USART_CLK);
+
     /* Disable caches before reading vector table */
     SCB_DisableICache();
     SCB_DisableDCache();
@@ -95,14 +111,14 @@ int main(void)
     jump_address  = *(__IO uint32_t *)(app_addr + 4);
 
     /* Validate SP and reset handler */
-    if ((app_stack_ptr >= SRAM_BASE && app_stack_ptr < SRAM_END) &&
+    if (sp_in_valid_sram(app_stack_ptr) &&
         (jump_address >= app_addr && jump_address < FLASH_END) &&
         (jump_address & 1))
     {
         SysTick->CTRL = 0;
         SCB->ICSR |= SCB_ICSR_PENDSTCLR_Msk;
 
-        SCB->VTOR = app_addr & 0x1FFFFF80U;
+        SCB->VTOR = app_addr & SCB_VTOR_TBLOFF_Msk;
         __set_MSP(app_stack_ptr);
 
         jump_address = *(__IO uint32_t *)(app_addr + 4);

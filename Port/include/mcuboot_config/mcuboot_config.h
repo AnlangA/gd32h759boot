@@ -91,10 +91,9 @@
 /* ======================================================================== */
 /*
  * Maximum number of flash sectors per image slot.
- * GD32H759 has up to 2 MB Flash; with 128 KB sectors this is ~16 sectors.
- * Set a reasonable upper bound.
+ * GD32H759: 640 KB slot / 4 KB sector = 160 sectors; set to 192 for headroom.
  */
-#define MCUBOOT_MAX_IMG_SECTORS 128
+#define MCUBOOT_MAX_IMG_SECTORS 192
 
 /* ======================================================================== */
 /*  Hardware key (optional)                                                 */
@@ -124,7 +123,7 @@
 /* ======================================================================== */
 /*  FIH (Fault Injection Hardening) profile                                 */
 /* ======================================================================== */
-/* #define MCUBOOT_FIH_PROFILE_OFF    */
+#define MCUBOOT_FIH_PROFILE_OFF
 /* #define MCUBOOT_FIH_PROFILE_LOW    */
 /* #define MCUBOOT_FIH_PROFILE_MEDIUM */
 /* #define MCUBOOT_FIH_PROFILE_HIGH   */

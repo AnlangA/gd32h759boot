@@ -36,10 +36,6 @@ void console_uart_init(void)
     usart_receive_config(CONSOLE_USARTX, USART_RECEIVE_DISABLE);
     usart_transmit_config(CONSOLE_USARTX, USART_TRANSMIT_ENABLE);
 
-    usart_interrupt_enable(CONSOLE_USARTX, USART_INT_RBNE);
-
-    nvic_irq_enable(CONSOLE_USART_IRQ, 1U, 0U);
-
     usart_enable(CONSOLE_USARTX);
 }
 

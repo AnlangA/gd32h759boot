@@ -14,10 +14,9 @@
  *   - gd32h7xx_fmc.h / gd32h7xx_fmc.c for HAL API
  *
  * Flash geometry (GD32H759):
- *   - Flash: 0x0800_0000, up to 3712 KB
- *   - Sector size: 128 KB
+ *   - Flash: 0x0800_0000, up to 3840 KB
+ *   - Sector size (erase granularity): 4 KB
  *   - Minimum write granularity: 8 bytes (64-bit double word)
- *   - Erase granularity: 128 KB per sector
  *   - Erased byte value: 0xFF
  */
 
@@ -107,65 +106,47 @@ static inline uint32_t fa_to_abs_addr(const struct flash_area *fa, uint32_t off)
 }
 
 /**
- * Erase a single 128 KB flash sector.
+ * Clear all FMC status flags before/after an operation.
  *
- * Uses the GD32H7xx standard peripheral library fmc_sector_erase().
- *
- * @param abs_addr  Absolute address within the sector to erase.
- *                  Must be sector-aligned.
- * @return 0 on success, non-zero on failure.
+ * The GD32H7xx HAL does not provide fmc_all_flags_clear(), so we
+ * clear each flag individually. This matches the official FMC example
+ * which clears all flags between operations.
  */
-static int erase_sector(uint32_t abs_addr)
+static void fmc_clear_all_flags(void)
 {
-    fmc_state_enum fmc_state;
-
-    fmc_unlock();
-
-    /* Clear error flags before operation */
     fmc_flag_clear(FMC_FLAG_END);
     fmc_flag_clear(FMC_FLAG_WPERR);
     fmc_flag_clear(FMC_FLAG_PGSERR);
-
-    fmc_state = fmc_sector_erase(abs_addr);
-
-    fmc_lock();
-
-    if (fmc_state != FMC_READY) {
-        FLASH_LOG_ERR("fmc_sector_erase failed at 0x%08lX, state=%d",
-                      (unsigned long)abs_addr, (int)fmc_state);
-        return -1;
-    }
-
-    return 0;
+    fmc_flag_clear(FMC_FLAG_RPERR);
+    fmc_flag_clear(FMC_FLAG_RSERR);
+    fmc_flag_clear(FMC_FLAG_ECCCOR);
+    fmc_flag_clear(FMC_FLAG_ECCDET);
+    fmc_flag_clear(FMC_FLAG_OBMERR);
 }
 
 /**
  * Program 8 bytes (64-bit) to flash at the given absolute address.
  *
- * Uses the GD32H7xx standard peripheral library fmc_doubleword_program().
+ * Caller must ensure FMC is unlocked before calling this function.
  *
  * @param abs_addr  Must be 8-byte aligned.
- * @param data      Pointer to at least 8 bytes of data.
+ * @param data      64-bit data word to program.
  * @return 0 on success, non-zero on failure.
  */
 static int program_doubleword(uint32_t abs_addr, uint64_t data)
 {
     fmc_state_enum fmc_state;
 
-    fmc_unlock();
-
-    /* Clear end-of-operation flag */
-    fmc_flag_clear(FMC_FLAG_END);
-
     fmc_state = fmc_doubleword_program(abs_addr, data);
-
-    fmc_lock();
 
     if (fmc_state != FMC_READY) {
         FLASH_LOG_ERR("fmc_doubleword_program failed at 0x%08lX, state=%d",
                       (unsigned long)abs_addr, (int)fmc_state);
         return -1;
     }
+
+    /* Invalidate D-Cache for the written 8 bytes so read-back is correct */
+    SCB_InvalidateDCache_by_Addr((uint32_t *)abs_addr, 8);
 
     /* Verify the written data */
     if (*(__IO uint64_t *)abs_addr != data) {
@@ -214,8 +195,8 @@ int flash_area_read(const struct flash_area *fa, uint32_t off,
         return -1;
     }
 
-    /* Bounds check */
-    if ((off + len) > fa->fa_size) {
+    /* Bounds check (safe against uint32_t overflow) */
+    if (len > fa->fa_size || off > fa->fa_size - len) {
         FLASH_LOG_ERR("flash_area_read: out of bounds (off=0x%lX len=%lu, size=0x%lX)",
                       (unsigned long)off, (unsigned long)len,
                       (unsigned long)fa->fa_size);
@@ -249,14 +230,17 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
         return -1;
     }
 
-    /* Bounds check */
-    if ((off + len) > fa->fa_size) {
+    /* Bounds check (safe against uint32_t overflow) */
+    if (len > fa->fa_size || off > fa->fa_size - len) {
         FLASH_LOG_ERR("flash_area_write: out of bounds");
         return -1;
     }
 
     abs_addr = fa_to_abs_addr(fa, off);
     remaining = len;
+
+    fmc_unlock();
+    fmc_clear_all_flags();
 
     /*
      * GD32H7xx FMC requires 8-byte (64-bit) aligned writes.
@@ -278,6 +262,9 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
             head_bytes = remaining;
         }
 
+        /* Ensure D-Cache does not hold stale data for this word */
+        SCB_InvalidateDCache_by_Addr((uint32_t *)aligned_start, 8);
+
         /* Read the existing 64-bit word */
         buf = *(__IO uint64_t *)aligned_start;
 
@@ -288,6 +275,8 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
         rc = program_doubleword(aligned_start, buf);
         if (rc != 0) {
             FLASH_LOG_ERR("flash_area_write: head write failed");
+            fmc_clear_all_flags();
+            fmc_lock();
             return rc;
         }
 
@@ -305,6 +294,8 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
         if (rc != 0) {
             FLASH_LOG_ERR("flash_area_write: write failed at 0x%08lX",
                           (unsigned long)abs_addr);
+            fmc_clear_all_flags();
+            fmc_lock();
             return rc;
         }
 
@@ -317,6 +308,9 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
     if (remaining > 0) {
         uint64_t buf;
 
+        /* Ensure D-Cache does not hold stale data for this word */
+        SCB_InvalidateDCache_by_Addr((uint32_t *)abs_addr, 8);
+
         /* Read-modify-write the last partial word */
         buf = *(__IO uint64_t *)abs_addr;
         memcpy(&buf, src_bytes, remaining);
@@ -324,9 +318,14 @@ int flash_area_write(const struct flash_area *fa, uint32_t off,
         rc = program_doubleword(abs_addr, buf);
         if (rc != 0) {
             FLASH_LOG_ERR("flash_area_write: tail write failed");
+            fmc_clear_all_flags();
+            fmc_lock();
             return rc;
         }
     }
+
+    fmc_clear_all_flags();
+    fmc_lock();
 
     return 0;
 }
@@ -340,14 +339,14 @@ int flash_area_erase(const struct flash_area *fa,
 {
     uint32_t abs_addr;
     uint32_t remaining;
-    int rc;
+    fmc_state_enum fmc_state;
 
     if (fa == NULL) {
         return -1;
     }
 
-    /* Bounds check */
-    if ((off + len) > fa->fa_size) {
+    /* Bounds check (safe against uint32_t overflow) */
+    if (len > fa->fa_size || off > fa->fa_size - len) {
         FLASH_LOG_ERR("flash_area_erase: out of bounds");
         return -1;
     }
@@ -367,25 +366,38 @@ int flash_area_erase(const struct flash_area *fa,
     abs_addr  = fa_to_abs_addr(fa, off);
     remaining = len;
 
-    /* Erase one sector at a time */
+    fmc_unlock();
+    fmc_clear_all_flags();
+
+    /* Erase all sectors within a single unlock/lock cycle */
     while (remaining > 0) {
-        rc = erase_sector(abs_addr);
-        if (rc != 0) {
-            FLASH_LOG_ERR("flash_area_erase: failed at 0x%08lX",
-                          (unsigned long)abs_addr);
-            return rc;
+        fmc_state = fmc_sector_erase(abs_addr);
+        if (fmc_state != FMC_READY) {
+            FLASH_LOG_ERR("flash_area_erase: failed at 0x%08lX, state=%d",
+                          (unsigned long)abs_addr, (int)fmc_state);
+            fmc_clear_all_flags();
+            fmc_lock();
+            return -1;
         }
+
+        /* Invalidate D-Cache for this sector */
+        SCB_InvalidateDCache_by_Addr((uint32_t *)abs_addr, FLASH_SECTOR_SIZE);
 
         /* Verify the sector was erased (check first word) */
         if (*(__IO uint32_t *)abs_addr != 0xFFFFFFFFU) {
             FLASH_LOG_ERR("flash_area_erase: verify failed at 0x%08lX",
                           (unsigned long)abs_addr);
+            fmc_clear_all_flags();
+            fmc_lock();
             return -1;
         }
 
         abs_addr  += FLASH_SECTOR_SIZE;
         remaining -= FLASH_SECTOR_SIZE;
     }
+
+    fmc_clear_all_flags();
+    fmc_lock();
 
     return 0;
 }

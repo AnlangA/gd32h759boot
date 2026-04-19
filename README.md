@@ -30,7 +30,7 @@ just clean      # 清理输出
 | MCU | GD32H759IMK6 |
 | 内核 | ARM Cortex-M7 (双精度 FPU) |
 | 主频 | 600 MHz（PLL0 × HXTAL 25 MHz） |
-| Flash | 3840 KB，扇区 128 KB，双字（8B）写入粒度 |
+| Flash | 3840 KB（960 × 4 KB 扇区），双字（8B）写入粒度 |
 | SRAM | 512 KB AXI SRAM + 64 KB ITCM + 64 KB DTCM |
 | 调试接口 | JTAG / SWD |
 | 开发板 | GD32H759I-EVAL-V2.0（参考） |

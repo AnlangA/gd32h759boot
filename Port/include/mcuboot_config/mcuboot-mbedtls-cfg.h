@@ -45,7 +45,7 @@
 /*  OID module – required by PK layer to identify algorithm identifiers     */
 /* ======================================================================== */
 #define MBEDTLS_OID_C
-#define MBEDTLS_OID_DUMP    /* optional, useful for debugging              */
+/* #define MBEDTLS_OID_DUMP */
 
 /* ======================================================================== */
 /*  Message digest framework                                                */
@@ -166,28 +166,12 @@
  * PSA infrastructure that expects MBEDTLS_PSA_CRYPTO_C to be present when
  * MBEDTLS_PSA_CRYPTO_CLIENT is set.  Since we are building a standalone
  * crypto library (not a PSA client-server split), we do not need the
- * client define.  If any header still references mbedtls_psa_client_handle_t
- * we provide a fallback typedef below.
+ * client define.
  */
-
-/*
- * Fallback typedef for mbedtls_psa_client_handle_t.
- * This type is normally provided by psa/crypto_platform.h when
- * MBEDTLS_PSA_CRYPTO_CLIENT is defined without MBEDTLS_PSA_CRYPTO_C.
- * Some mbedTLS v3.x internal headers unconditionally reference it in
- * struct definitions guarded by MBEDTLS_PSA_CRYPTO_CLIENT, so we
- * provide it here as a safety net.
- */
-#include <stdint.h>
-#ifndef mbedtls_psa_client_handle_t
-typedef uint32_t mbedtls_psa_client_handle_t;
-#endif
 
 /* ======================================================================== */
 /*  Tweaks for embedded / Cortex-M7                                         */
 /* ======================================================================== */
-
-/* Disable inline assembly for bignum if it causes issues with ARMCLANG */
 /* #define MBEDTLS_NO_UDBL_DIVISION */
 
 /* 64-bit integer type is available on Cortex-M7 */
@@ -199,7 +183,7 @@ typedef uint32_t mbedtls_psa_client_handle_t;
 /*
  * Memory saving: limit the maximum MPI (bignum) size.
  * P-256 needs at most 256-bit (32-byte) operands.
- * Allow some headroom for intermediate values: 512 bits (64 bytes).
+ * 48 bytes (384 bits) provides headroom for intermediate values.
  */
 #define MBEDTLS_MPI_MAX_SIZE            48
 
