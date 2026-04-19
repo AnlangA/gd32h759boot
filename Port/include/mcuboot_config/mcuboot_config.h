@@ -52,9 +52,15 @@
  *
  * Overwrite-only is simplest and most suitable for initial bring-up.
  * Switch to SWAP mode when revert support is needed.
+ *
+ * NOTE: Do NOT define MCUBOOT_SWAP_USING_SCRATCH explicitly here.
+ * When MCUBOOT_OVERWRITE_ONLY is disabled, bootutil_priv.h will
+ * automatically default to MCUBOOT_SWAP_USING_SCRATCH mode.
+ * Defining it manually causes a macro redefinition warning.
  */
-#define MCUBOOT_OVERWRITE_ONLY
+/* #define MCUBOOT_OVERWRITE_ONLY */
 /* #define MCUBOOT_OVERWRITE_ONLY_FAST */
+/* #define MCUBOOT_SWAP_USING_SCRATCH  - auto-enabled by MCUBoot */
 
 /* ======================================================================== */
 /*  Validate primary slot on every boot                                     */

@@ -139,7 +139,7 @@ gd32h759boot/
 | 哈希算法 | SHA-256 | `MCUBOOT_SHA256` |
 | 密码学后端 | mbedTLS | `MCUBOOT_USE_MBED_TLS` |
 | 镜像模式 | 单镜像 | `MCUBOOT_IMAGE_NUMBER=1` |
-| 升级模式 | Overwrite-only | `MCUBOOT_OVERWRITE_ONLY`（不支持回滚） |
+| 升级模式 | Swap-using-scratch | `MCUBOOT_SWAP_USING_SCRATCH`（支持回滚，使用Scratch区） |
 | 启动验证 | 启用 | `MCUBOOT_VALIDATE_PRIMARY_SLOT` |
 | 日志 | 启用 | `[MCUBOOT][ERR/WRN/INF/DBG]` 前缀 |
 | 最大扇区数 | 128 | `MCUBOOT_MAX_IMG_SECTORS` |
